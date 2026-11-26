@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>协调器工作原理 · 动画演示</title>
+    <style>
+      :root {
+        --bg: #070b14;
+        --panel: rgba(15, 23, 42, 0.86);
+        --line: #1e293b;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --green: #34d399;
+        --amber: #fbbf24;
+        --red: #f87171;
+        --purple: #a78bfa;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 15% 10%, rgba(56, 189, 248, 0.14), transparent 35%),
+          radial-gradient(circle at 85% 20%, rgba(167, 139, 250, 0.12), transparent 35%),
+          var(--bg);
+      }
+
+      .app { max-width: 1440px; margin: 0 auto; padding: 28px; }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 20px;
+        margin-bottom: 18px;
+      }
+
+      .topbar h1 { margin: 0 0 6px; font-size: 26px; }
+      .topbar p { margin: 0; color: var(--muted); font-size: 14px; }
+
+      .back-link {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 14px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        padding: 8px 14px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+
+      .back-link:hover { background: rgba(56, 189, 248, 0.1); }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        margin-bottom: 18px;
+      }
+
+      button, select {
+        font: inherit;
+        color: var(--text);
+        background: #111c33;
+        border: 1px solid #334155;
+        border-radius: 9px;
+        padding: 7px 14px;
+        cursor: pointer;
+      }
+
+      button:hover:not(:disabled), select:hover { border-color: var(--accent); }
+      button:disabled { opacity: 0.35; cursor: not-allowed; }
+      .play-btn { background: #0284c7; border-color: #0284c7; color: white; min-width: 76px; }
+      .play-btn:hover { background: #0369a1; }
+
+      .progress-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px; }
+      .progress { flex: 1; height: 6px; background: #1e293b; border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--purple)); transition: width 0.35s ease; }
+      .speed-label { color: var(--muted); font-size: 13px; }
+
+      .phase-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+      .phase-badge {
+        padding: 5px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid;
+      }
+      .phase-schedule { color: var(--accent); border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); }
+      .phase-render { color: var(--purple); border-color: rgba(167, 139, 250, 0.4); background: rgba(167, 139, 250, 0.1); }
+      .phase-commit { color: var(--green); border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.1); }
+      .phase-event { color: var(--amber); border-color: rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.1); }
+      .phase-idle { color: var(--muted); border-color: #334155; background: #111c33; }
+      .step-counter { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+      .columns { display: grid; grid-template-columns: 0.9fr 1.25fr 0.85fr; gap: 18px; }
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--panel);
+        padding: 18px;
+        min-height: 540px;
+        overflow: hidden;
+      }
+      .panel h2 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+      .panel h2 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+      .call-card {
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 14px;
+        background: #0b1426;
+        margin-bottom: 12px;
+      }
+      .call-label { color: var(--muted); font-size: 11px; letter-spacing: 0.08em; margin-bottom: 8px; }
+      .call-card code { color: #7dd3fc; font-size: 13px; word-break: break-all; }
+      .detail { color: #cbd5e1; font-size: 13px; line-height: 1.7; margin-bottom: 16px; min-height: 66px; }
+
+      .log {
+        height: 320px;
+        overflow: auto;
+        border-top: 1px dashed #334155;
+        padding-top: 10px;
+      }
+      .log-item {
+        display: grid;
+        grid-template-columns: 28px 1fr;
+        gap: 8px;
+        padding: 7px 8px;
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .log-item.current { background: rgba(56, 189, 248, 0.12); color: var(--text); }
+      .log-index { color: #64748b; font-variant-numeric: tabular-nums; }
+      .log-item code { color: inherit; font-size: 12px; word-break: break-all; }
+      .log-phase { grid-column: 2; font-size: 10px; opacity: 0.75; }
+
+      .tree { font-size: 12px; }
+      .tree-node { position: relative; margin: 6px 0; }
+      .fiber-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 11px;
+        border-radius: 10px;
+        border: 1px solid #334155;
+        background: #111c33;
+        transition: all 0.3s ease;
+      }
+      .fiber-box.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+        animation: pulse 1.3s ease-in-out infinite;
+      }
+      .fiber-tag { color: #7dd3fc; font-weight: 600; }
+      .fiber-label { color: #e2e8f0; }
+      .effect { font-size: 10px; padding: 2px 7px; border-radius: 999px; border: 1px solid; }
+      .effect-PLACEMENT { color: var(--green); border-color: rgba(52, 211, 153, 0.5); }
+      .effect-UPDATE, .effect-UPDATE_QUEUE { color: var(--amber); border-color: rgba(251, 191, 36, 0.5); }
+      .effect-DELETION { color: var(--red); border-color: rgba(248, 113, 113, 0.5); }
+      .effect-CREATED, .effect-WIP { color: var(--purple); border-color: rgba(167, 139, 250, 0.5); }
+
+      .children {
+        margin-left: 16px;
+        padding-left: 18px;
+        border-left: 1px dashed #334155;
+      }
+      .children > .tree-node::before {
+        content: '';
+        position: absolute;
+        left: -18px;
+        top: 17px;
+        width: 18px;
+        border-top: 1px dashed #334155;
+      }
+
+      .dom-stage { min-height: 300px; display: flex; align-items: center; justify-content: center; }
+      .dom-card {
+        width: 100%;
+        max-width: 330px;
+        padding: 18px;
+        border-radius: 14px;
+        background: #f8fafc;
+        color: #0f172a;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+      }
+      .dom-title { font-weight: 700; font-size: 15px; }
+      .dom-count { margin: 10px 0 14px; color: #475569; font-size: 14px; }
+      .dom-card button {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: white;
+        font-size: 13px;
+      }
+      .dom-card ul { margin: 14px 0 0; padding-left: 20px; color: #334155; font-size: 13px; line-height: 1.8; }
+      .empty { color: var(--muted); font-size: 13px; }
+
+      .dom-mount { animation: flashIn 0.8s ease both; }
+      .dom-update-insert { animation: flashUpdate 0.9s ease both; }
+      .dom-delete { animation: flashOut 0.9s ease forwards; }
+      .ghost { opacity: 0.45; text-decoration: line-through; }
+
+      @keyframes pulse {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-2px); }
+      }
+      @keyframes flashIn {
+        from { opacity: 0; transform: scale(0.92); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes flashUpdate {
+        0% { background: rgba(251, 191, 36, 0.35); }
+        100% { background: transparent; }
+      }
+      @keyframes flashOut {
+        to { opacity: 0; transform: translateX(18px); }
+      }
+
+      @media (max-width: 1100px) {
+        .columns { grid-template-columns: 1fr; }
+        .panel { min-height: auto; }
+        .log { height: 200px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div>
+          <h1>协调器工作原理 · 动画演示</h1>
+          <p>逐步观察 workLoop 如何在 Fiber 树上执行 beginWork / completeWork，并在 commit 阶段操作 DOM。</p>
+        </div>
+        <a class="back-link" href="/index.html">← 返回教学版首页</a>
+      </header>
+
+      <section class="controls">
+        <button id="prevBtn">← 上一步</button>
+        <button id="playBtn" class="play-btn">播放</button>
+        <button id="nextBtn">下一步 →</button>
+        <button id="resetBtn">重置</button>
+        <div class="progress-wrap">
+          <div class="progress"><div id="progressFill" class="progress-fill"></div></div>
+          <span class="speed-label">速度</span>
+          <select id="speedSelect">
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
+        </div>
+      </section>
+
+      <div class="phase-row">
+        <span id="phaseBadge" class="phase-badge phase-idle">准备</span>
+        <span id="stepCounter" class="step-counter">1 / 20</span>
+      </div>
+
+      <main class="columns">
+        <section class="panel">
+          <h2>当前调用</h2>
+          <div id="callCard" class="call-card"></div>
+          <div id="detail" class="detail"></div>
+          <h2>调用轨迹</h2>
+          <div id="log" class="log"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Fiber 树 <small>高亮 = 当前工作节点；彩色徽标 = EffectTag</small></h2>
+          <div id="fiberTree" class="tree"></div>
+        </section>
+
+        <section class="panel">
+          <h2>宿主 DOM <small>commit 阶段才会真正变化</small></h2>
+          <div id="domStage" class="dom-stage"></div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      const fullTree = {
+        id: 'root', tag: 'HostRoot', label: 'container', meta: 'stateNode → FiberRoot',
+        children: [{
+          id: 'counter', tag: 'FunctionComponent', label: 'Counter', meta: 'props: { title }',
+          children: [{
+            id: 'div', tag: 'HostComponent', label: '<div className="card">', meta: '',
+            children: [
+              { id: 'h2', tag: 'HostComponent', label: '<h2>', meta: '', children: [
+                { id: 'h2text', tag: 'HostText', label: '"Mini React · 模块关系演示"', meta: '' }
+              ] },
+              { id: 'p', tag: 'HostComponent', label: '<p>', meta: '', children: [
+                { id: 'ptext', tag: 'HostText', label: '"当前计数：0"', meta: '' }
+              ] },
+              { id: 'button', tag: 'HostComponent', label: '<button>', meta: '', children: [
+                { id: 'btntext', tag: 'HostText', label: '"点我 +1"', meta: '' }
+              ] },
+              { id: 'ul', tag: 'HostComponent', label: '<ul>', meta: '', children: [
+                { id: 'li0', tag: 'HostComponent', label: '<li key=0>', key: '0', meta: '', children: [
+                  { id: 'litext0', tag: 'HostText', label: '"列表项 1"', meta: '' }
+                ] },
+                { id: 'li1', tag: 'HostComponent', label: '<li key=1>', key: '1', meta: '', children: [
+                  { id: 'litext1', tag: 'HostText', label: '"列表项 2"', meta: '' }
+                ] }
+              ] }
+            ]
+          }]
+        }]
+      };
+
+      const baseReveal = ['root', 'counter', 'div', 'h2', 'h2text', 'p', 'ptext', 'button', 'btntext', 'ul'];
+      const revealList = (count) => baseReveal.concat(
+        Array.from({ length: count }, (_, index) => ['li' + index, 'litext' + index])
+      );
+
+      const steps = [
+        {
+          phase: '准备', title: '等待首次渲染', call: 'createRoot(container)',
+          detail: '创建 FiberRoot 并在容器上注册事件监听，此时宿主 DOM 仍为空。',
+          reveal: ['root'], active: ['root'], effects: {}, domCount: null
+        },
+        {
+          phase: '调度', title: '更新入队', call: 'root.render(<Counter/>) → updateContainer',
+          detail: 'Element 被放到 HostRoot.pendingProps，root 加入 rootsToSchedule。',
+          reveal: ['root'], active: ['root'], effects: {}, domCount: null
+        },
+        {
+          phase: '调度', title: '注册回调', call: 'scheduleUpdateOnFiber → unstable_scheduleCallback',
+          detail: 'Scheduler 把 flushWork 注册为微任务；同步代码先返回，不立即渲染。',
+          reveal: ['root'], active: ['root'], effects: {}, domCount: null
+        },
+        {
+          phase: 'Render · beginWork', title: '创建 workInProgress', call: 'createWorkInProgress(current)',
+          detail: '双缓冲优先复用 alternate，得到本轮渲染使用的 workInProgress 根节点。',
+          reveal: ['root'], active: ['root'], effects: { root: 'WIP' }, domCount: null
+        },
+        {
+          phase: 'Render · beginWork', title: '协调根节点', call: 'beginWork(HostRoot) → reconcileChildren',
+          detail: '读取 pendingProps.children，为 Counter 创建 FunctionComponent Fiber。',
+          reveal: ['root', 'counter'], active: ['root', 'counter'],
+          effects: { counter: 'PLACEMENT' }, domCount: null
+        },
+        {
+          phase: 'Render · beginWork', title: '执行函数组件', call: 'renderWithHooks → Counter() → resetHooks',
+          detail: '渲染前注入 dispatcher，useState 返回 [0, setCount]；组件产出 div 子树。',
+          reveal: ['root', 'counter', 'div'], active: ['counter', 'div'],
+          effects: { div: 'PLACEMENT' }, domCount: null
+        },
+        {
+          phase: 'Render · beginWork', title: '协调 div 子节点', call: 'reconcileChildren(div.children)',
+          detail: '依次创建 h2、p、button、ul 的 Fiber；原始文本子节点被包装成 HostText Fiber。',
+          reveal: baseReveal, active: ['h2', 'p', 'button', 'ul'],
+          effects: { h2: 'PLACEMENT', p: 'PLACEMENT', button: 'PLACEMENT', ul: 'PLACEMENT' },
+          domCount: null
+        },
+        {
+          phase: 'Render · beginWork', title: '协调空列表', call: 'reconcileChildren(ul.children)',
+          detail: 'count=0，列表没有子节点，ul.child 保持为 null。',
+          reveal: baseReveal, active: ['ul'], effects: {}, domCount: null
+        },
+        {
+          phase: 'Render · completeWork', title: '创建宿主实例', call: 'completeWork → HostConfig.createInstance',
+          detail: '自底向上创建真实 DOM 节点，但还没有插入容器；复用节点保留旧 stateNode。',
+          reveal: baseReveal,
+          active: ['h2text', 'ptext', 'btntext', 'h2', 'p', 'button', 'ul', 'div'],
+          effects: { h2text: 'CREATED', ptext: 'CREATED', btntext: 'CREATED', h2: 'CREATED', p: 'CREATED', button: 'CREATED', ul: 'CREATED', div: 'CREATED' },
+          domCount: null
+        },
+        {
+          phase: 'Commit', title: '插入容器', call: 'commitRoot → commitWork → appendChildToContainer',
+          detail: '执行 PLACEMENT，把 div 子树挂到容器；写入 DOM→Fiber 映射并切换 root.current。',
+          reveal: baseReveal, active: ['div'], effects: {},
+          domCount: 0, domAction: 'mount', domTargets: ['card']
+        },
+        {
+          phase: '事件', title: '点击按钮', call: 'click → dispatchEvent → onClick → setCount',
+          detail: '事件系统从 button DOM 反查 Fiber，沿 return 链找到 onClick 并执行。',
+          reveal: baseReveal, active: ['button'], effects: {},
+          domCount: 0, domAction: '', domTargets: []
+        },
+        {
+          phase: '调度', title: 'setState 入队', call: 'dispatchSetState → scheduleUpdateOnFiber',
+          detail: 'action 进入 queue.pending，root 再次进入 Scheduler；此时 DOM 还未变化。',
+          reveal: baseReveal, active: ['counter'], effects: { counter: 'UPDATE_QUEUE' },
+          domCount: 0, domAction: '', domTargets: []
+        },
+        {
+          phase: 'Render · beginWork', title: '计算新状态', call: 'renderWithHooks → updateState → count=1',
+          detail: '复用 Hook.queue，执行 action(value => value + 1)，得到新 count；仅更新内存。',
+          reveal: baseReveal, active: ['counter', 'p', 'ptext'],
+          effects: { ptext: 'UPDATE' }, domCount: 0, domAction: '', domTargets: []
+        },
+        {
+          phase: 'Render · beginWork', title: 'diff 列表', call: 'reconcileChildren(ul) → 复用 + 新增',
+          detail: 'li key=0 的 type/key 相同，复用并标记 UPDATE；count=1 需要新建 li key=1 并标记 PLACEMENT。',
+          reveal: revealList(1), active: ['ul', 'li0', 'li1'],
+          effects: { li0: 'UPDATE', li1: 'PLACEMENT' }, domCount: 0, domAction: '', domTargets: []
+        },
+        {
+          phase: 'Render · completeWork', title: '创建新节点 DOM', call: 'completeWork(li1) → createInstance',
+          detail: '复用节点保留 stateNode；新 li 创建 DOM 实例，等待 commit 插入。',
+          reveal: revealList(1), active: ['li1', 'litext1'],
+          effects: { li1: 'CREATED' }, domCount: 0, domAction: '', domTargets: []
+        },
+        {
+          phase: 'Commit', title: '提交更新', call: 'commitTextUpdate(p) + appendChild(li1)',
+          detail: 'p 文本由 0 变为 1，新 li 插入 ul；root.current 指向本轮 finishedWork。',
+          reveal: revealList(1), active: ['ptext', 'li1'], effects: {},
+          domCount: 1, domAction: 'update-insert', domTargets: ['ptext', 'li1']
+        },
+        {
+          phase: '事件', title: '再次点击到 count=2', call: 'setCount → reconcileChildren → PLACEMENT(li1)',
+          detail: '为演示删除先补一帧：再次点击后列表变成两项，li key=1 被插入 DOM。',
+          reveal: revealList(2), active: ['button', 'li1'], effects: { li1: 'PLACEMENT' },
+          domCount: 2, domAction: 'update-insert', domTargets: ['li1']
+        },
+        {
+          phase: 'Render · beginWork', title: '缩减列表，标记删除', call: 'reconcileChildren → DELETION(li1)',
+          detail: '新树只需要 li key=0；旧树多出的 li key=1 被收集到 deletions 并标记 DELETION。',
+          reveal: revealList(2), active: ['li1'], effects: { li1: 'DELETION' },
+          domCount: 2, domAction: 'mark-delete', domTargets: []
+        },
+        {
+          phase: 'Commit', title: '执行删除', call: 'commitDeletion → removeChild',
+          detail: '从 DOM 中移除 li key=1；Fiber 树与宿主 DOM 重新保持一致。',
+          reveal: revealList(1), active: ['ul'], effects: {},
+          domCount: 1, domAction: 'delete', domTargets: ['li1']
+        },
+        {
+          phase: '完成', title: '本轮更新结束', call: 'root.current = finishedWork',
+          detail: 'DOM 与 Fiber 树一致，等待下一次 setState 或外部渲染再次启动 workLoop。',
+          reveal: revealList(1), active: [], effects: {},
+          domCount: 1, domAction: '', domTargets: []
+        }
+      ];
+
+      const prevBtn = document.getElementById('prevBtn');
+      const playBtn = document.getElementById('playBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const resetBtn = document.getElementById('resetBtn');
+      const speedSelect = document.getElementById('speedSelect');
+      const phaseBadge = document.getElementById('phaseBadge');
+      const stepCounter = document.getElementById('stepCounter');
+      const callCard = document.getElementById('callCard');
+      const detail = document.getElementById('detail');
+      const fiberTree = document.getElementById('fiberTree');
+      const domStage = document.getElementById('domStage');
+      const log = document.getElementById('log');
+      const progressFill = document.getElementById('progressFill');
+
+      let current = 0;
+      let timer = null;
+      let playing = false;
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, (char) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[char]);
+      }
+
+      function phaseClass(phase) {
+        if (phase.indexOf('Render') !== -1) return 'phase-render';
+        if (phase === 'Commit') return 'phase-commit';
+        if (phase === '事件') return 'phase-event';
+        if (phase === '调度') return 'phase-schedule';
+        return 'phase-idle';
+      }
+
+      function filterTree(node, revealed) {
+        if (!revealed.has(node.id)) return null;
+        return {
+          ...node,
+          children: (node.children || []).map((child) => filterTree(child, revealed)).filter(Boolean)
+        };
+      }
+
+      function labelOf(node, step) {
+        if (node.id === 'ptext') {
+          return '"当前计数：' + (step.domCount === null ? 0 : step.domCount) + '"';
+        }
+        return node.label;
+      }
+
+      function nodeHtml(node, step) {
+        const active = (step.active || []).indexOf(node.id) !== -1;
+        const effect = (step.effects || {})[node.id];
+        const effectHtml = effect
+          ? '<span class="effect effect-' + effect + '">' + effect + '</span>'
+          : '';
+        const childrenHtml = node.children.length
+          ? '<div class="children">' + node.children.map((child) => nodeHtml(child, step)).join('') + '</div>'
+          : '';
+        return '<div class="tree-node">' +
+          '<div class="fiber-box ' + (active ? 'active' : '') + '">' +
+            '<span class="fiber-tag">' + escapeHtml(node.tag) + '</span>' +
+            '<span class="fiber-label">' + escapeHtml(labelOf(node, step)) + '</span>' +
+            effectHtml +
+          '</div>' + childrenHtml + '</div>';
+      }
+
+      function renderTree(step) {
+        const revealed = new Set(step.reveal || []);
+        const tree = filterTree(fullTree, revealed);
+        fiberTree.innerHTML = tree ? nodeHtml(tree, step) : '<div class="empty">尚未创建 Fiber</div>';
+      }
+
+      function domClass(step, key) {
+        return (step.domTargets || []).indexOf(key) !== -1 ? ' dom-' + step.domAction : '';
+      }
+
+      function renderDom(step) {
+        if (step.domCount === null) {
+          domStage.innerHTML = '<div class="empty">容器为空：commit 阶段才会写入 DOM</div>';
+          return;
+        }
+
+        let items = '';
+        for (let index = 0; index < step.domCount; index += 1) {
+          items += '<li class="' + domClass(step, 'li' + index) + '">列表项 ' + (index + 1) + '</li>';
+        }
+        if (step.domAction === 'delete') {
+          items += '<li class="ghost dom-delete">列表项 2</li>';
+        }
+
+        domStage.innerHTML =
+          '<div class="dom-card' + domClass(step, 'card') + '">' +
+            '<div class="dom-title' + domClass(step, 'h2text') + '">Mini React · 模块关系演示</div>' +
+            '<div class="dom-count' + domClass(step, 'ptext') + '">当前计数：' + step.domCount + '</div>' +
+            '<button class="' + domClass(step, 'button').trim() + '">点我 +1</button>' +
+            '<ul>' + items + '</ul>' +
+          '</div>';
+      }
+
+      function renderLog() {
+        log.innerHTML = steps.slice(0, current + 1).map((step, index) =>
+          '<div class="log-item ' + (index === current ? 'current' : '') + '">' +
+            '<span class="log-index">' + String(index + 1).padStart(2, '0') + '</span>' +
+            '<code>' + escapeHtml(step.call) + '</code>' +
+            '<span class="log-phase">' + escapeHtml(step.phase) + '</span>' +
+          '</div>'
+        ).join('');
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function render() {
+        const step = steps[current];
+        phaseBadge.textContent = step.phase;
+        phaseBadge.className = 'phase-badge ' + phaseClass(step.phase);
+        stepCounter.textContent = (current + 1) + ' / ' + steps.length;
+        callCard.innerHTML =
+          '<div class="call-label">' + escapeHtml(step.title) + '</div>' +
+          '<code>' + escapeHtml(step.call) + '</code>';
+        detail.textContent = step.detail;
+        renderTree(step);
+        renderDom(step);
+        renderLog();
+        progressFill.style.width = (((current + 1) / steps.length) * 100) + '%';
+        prevBtn.disabled = current === 0;
+        nextBtn.disabled = current === steps.length - 1;
+      }
+
+      function stop() {
+        playing = false;
+        clearTimeout(timer);
+        timer = null;
+        playBtn.textContent = '播放';
+      }
+
+      function scheduleNext() {
+        timer = setTimeout(() => {
+          if (current < steps.length - 1) {
+            current += 1;
+            render();
+            scheduleNext();
+          } else {
+            stop();
+          }
+        }, 1600 / Number(speedSelect.value));
+      }
+
+      function play() {
+        if (playing) return;
+        if (current === steps.length - 1) current = 0;
+        playing = true;
+        playBtn.textContent = '暂停';
+        render();
+        scheduleNext();
+      }
+
+      function next() {
+        stop();
+        if (current < steps.length - 1) {
+          current += 1;
+          render();
+        }
+      }
+
+      function previous() {
+        stop();
+        if (current > 0) {
+          current -= 1;
+          render();
+        }
+      }
+
+      function reset() {
+        stop();
+        current = 0;
+        render();
+      }
+
+      prevBtn.addEventListener('click', previous);
+      nextBtn.addEventListener('click', next);
+      resetBtn.addEventListener('click', reset);
+      playBtn.addEventListener('click', () => (playing ? stop() : play()));
+      speedSelect.addEventListener('change', () => {
+        if (playing) {
+          stop();
+          play();
+        }
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (['INPUT', 'SELECT', 'BUTTON'].indexOf(event.target.tagName) !== -1) return;
+        if (event.key === 'ArrowRight') next();
+        else if (event.key === 'ArrowLeft') previous();
+        else if (event.code === 'Space') {
+          event.preventDefault();
+          playing ? stop() : play();
+        }
+      });
+
+      render();
+    </script>
+  </body>
+</html>

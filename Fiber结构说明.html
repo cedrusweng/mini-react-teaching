@@ -1,0 +1,1025 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fiber 结构与使用方法 · Mini React</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --paper: #fff;
+        --ink: #1f2937;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --accent: #2563eb;
+        --accent-soft: #eef2ff;
+        --green: #0f9f6e;
+        --amber: #b45309;
+        --red: #dc2626;
+        --purple: #7c3aed;
+        --code-bg: #0f172a;
+        --code-ink: #e2e8f0;
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        line-height: 1.7;
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        padding: 26px 20px;
+        background: #0f172a;
+        color: #cbd5e1;
+      }
+      .brand { color: #fff; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+      .brand small { display: block; color: #94a3b8; font-size: 11px; font-weight: 400; }
+      .sidebar nav { margin-top: 24px; }
+      .sidebar nav a {
+        display: block;
+        color: #cbd5e1;
+        padding: 7px 10px;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .sidebar nav a:hover { background: rgba(148, 163, 184, 0.15); color: #fff; text-decoration: none; }
+      .sidebar .divider { height: 1px; background: #1e293b; margin: 18px 0; }
+      .back-link {
+        display: inline-block;
+        margin-top: 18px;
+        font-size: 12px;
+        color: #7dd3fc;
+        border: 1px solid #334155;
+        border-radius: 999px;
+        padding: 5px 12px;
+      }
+      .back-link:hover { background: rgba(56, 189, 248, 0.12); text-decoration: none; }
+
+      .content { padding: 40px 48px 80px; max-width: 1180px; }
+      .doc-header { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 28px; }
+      .doc-header h1 { margin: 0 0 10px; font-size: 30px; }
+      .doc-header .subtitle { color: var(--muted); margin: 0 0 18px; }
+      .badges span {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        margin-right: 8px;
+      }
+
+      section {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 24px 28px;
+        margin-bottom: 22px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+      }
+      h2 { margin: 0 0 16px; font-size: 21px; }
+      h3 { margin: 24px 0 10px; font-size: 15px; color: #334155; }
+      p { margin: 10px 0; }
+      ul, ol { margin: 10px 0; padding-left: 22px; }
+      li { margin: 5px 0; }
+      .muted { color: var(--muted); font-size: 13px; }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #eef2ff;
+        color: #3730a3;
+        padding: 1px 5px;
+        border-radius: 5px;
+        font-size: 12px;
+      }
+      pre {
+        background: var(--code-bg);
+        color: var(--code-ink);
+        padding: 16px 18px;
+        border-radius: 12px;
+        overflow: auto;
+        font-size: 12.5px;
+        line-height: 1.65;
+        margin: 12px 0 18px;
+      }
+      pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+      table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 13px; }
+      th, td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
+      th { background: #f8fafc; color: #475569; font-weight: 600; }
+      tr:nth-child(even) td { background: #fbfdff; }
+      td:first-child { white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; color: #3730a3; }
+
+      .callout {
+        border-left: 3px solid var(--accent);
+        background: var(--accent-soft);
+        padding: 10px 14px;
+        border-radius: 0 10px 10px 0;
+        font-size: 13px;
+        margin: 14px 0;
+      }
+
+      .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
+      button.action {
+        font: inherit;
+        font-size: 13px;
+        color: #fff;
+        background: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 9px;
+        padding: 7px 16px;
+        cursor: pointer;
+      }
+      button.action:hover { background: #1d4ed8; }
+      button.action.ghost { background: #fff; color: var(--ink); border-color: #cbd5e1; }
+      button.action.ghost:hover { border-color: var(--accent); }
+      .phase-badge {
+        font-size: 12px;
+        padding: 5px 12px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: #475569;
+        border: 1px solid var(--line);
+      }
+      .phase-badge.wip { background: #f5f3ff; color: var(--purple); border-color: #ddd6fe; }
+      .phase-badge.done { background: #ecfdf5; color: var(--green); border-color: #a7f3d0; }
+
+      .tree-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .tree-panel { border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #fbfdff; min-height: 320px; overflow: auto; }
+      .tree-panel h3 { margin: 0 0 14px; font-size: 14px; }
+      .tree-panel .hint { font-size: 12px; color: var(--muted); }
+      .empty { color: #94a3b8; font-size: 13px; padding: 40px 0; text-align: center; }
+
+      .node-wrap { display: flex; flex-direction: column; align-items: center; }
+      .node {
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        min-width: 132px;
+        max-width: 190px;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        border-radius: 10px;
+        padding: 8px 10px;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.05);
+      }
+      .node:hover { border-color: var(--accent); }
+      .node.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .node .tag { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.03em; margin-bottom: 2px; }
+      .node strong { display: block; font-size: 12px; word-break: break-all; }
+      .node small { display: block; color: var(--muted); font-size: 10px; word-break: break-all; }
+      .node.effect-UPDATE { border-color: var(--amber); background: #fffbeb; }
+      .node.effect-PLACEMENT { border-color: var(--green); background: #ecfdf5; }
+      .node.effect-DELETION { border-color: var(--red); background: #fef2f2; text-decoration: line-through; }
+      .tag-1 .tag { color: var(--purple); }
+      .tag-2 .tag { color: var(--accent); }
+      .tag-3 .tag { color: var(--green); }
+
+      .children { display: flex; gap: 14px; margin-top: 16px; padding-top: 14px; position: relative; }
+      .children::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 1px;
+        height: 14px;
+        background: #cbd5e1;
+      }
+      .node-wrap > .children::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 10%;
+        right: 10%;
+        height: 1px;
+        background: #cbd5e1;
+      }
+      .children > .node-wrap { position: relative; padding-top: 14px; }
+      .children > .node-wrap::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 1px;
+        height: 14px;
+        background: #cbd5e1;
+      }
+
+      .inspector { margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; background: #fff; }
+      .inspector h3 { margin: 0 0 10px; font-size: 14px; }
+      .field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px 14px; }
+      .field { display: flex; gap: 8px; font-size: 12px; border-bottom: 1px dashed var(--line); padding-bottom: 5px; }
+      .field b { min-width: 104px; color: #475569; font-family: ui-monospace, Menlo, Consolas, monospace; }
+      .field span { word-break: break-all; color: #0f172a; }
+
+      .log { margin: 14px 0 0; padding: 10px 14px 10px 30px; background: #f8fafc; border-radius: 10px; font-size: 12.5px; }
+      .log li::marker { color: var(--accent); font-weight: 700; }
+
+      .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 14px; }
+      .step-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+      .step-card b { display: block; color: var(--accent); font-size: 12px; margin-bottom: 4px; }
+      .step-card span { font-size: 12.5px; color: #475569; }
+
+      @media (max-width: 900px) {
+        .layout { display: block; }
+        .sidebar { position: static; height: auto; }
+        .content { padding: 28px 18px 60px; }
+        .tree-stage { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Mini React 教学版<small>Fiber 结构说明</small></div>
+        <nav>
+          <a href="#overview">1. Fiber 是什么</a>
+          <a href="#fields">2. 字段总览</a>
+          <a href="#data-structure">3. Fiber 树的数据结构</a>
+          <a href="#tree">4. 结构与交互演示</a>
+          <a href="#double-buffer">5. 双缓存机制原理</a>
+          <a href="#workloop">6. 循环遍历算法</a>
+          <a href="#api">7. 使用方法（API）</a>
+          <a href="#pitfalls">8. 易错点</a>
+        </nav>
+        <div class="divider"></div>
+        <a class="back-link" href="/index.html">← 返回演示首页</a>
+      </aside>
+
+      <main class="content">
+        <header class="doc-header">
+          <h1>Fiber 结构与使用方法</h1>
+          <p class="subtitle">基于 <code>src/reconciler/ReactFiber.js</code>，说明每个字段的职责、Fiber 树的连接方式，以及协调器如何创建和复用 Fiber。</p>
+          <div class="badges"><span>源码位置：src/reconciler/ReactFiber.js</span><span>配套：ReactFiberWorkLoop / BeginWork / CommitWork</span></div>
+        </header>
+
+        <section id="overview">
+          <h2>1. Fiber 是什么</h2>
+          <p>Fiber 是协调器的<strong>最小工作单元</strong>，也是一个普通的 JS 对象。它把「组件 / DOM 节点」描述成可中断、可复用的链表节点：</p>
+          <ul>
+            <li><strong>Element → Fiber → DOM</strong>：<code>createElement</code> 产出不可变描述，Fiber 持有运行期状态、宿主实例和副作用。</li>
+            <li>一个 Fiber 对应一次渲染中的某个节点；函数组件 Fiber 没有自己的 DOM，靠 <code>stateNode</code> 为空来区分。</li>
+            <li>多个 Fiber 通过 <code>child / sibling / return</code> 连成树，遍历时本质是一条可逐节点推进的链表。</li>
+            <li>每次更新会构建一棵 <code>workInProgress</code> 树，与已提交的 <code>current</code> 树通过 <code>alternate</code> 互相指向，即「双缓冲」。</li>
+          </ul>
+          <div class="callout">一句话记忆：<code>tag/type/key</code> 决定「它是谁」，<code>child/sibling/return</code> 决定「它在哪」，<code>pendingProps/memoizedProps/memoizedState</code> 决定「它的数据」；<code>stateNode/alternate/effectTag</code> 决定「怎么更新」。</div>
+        </section>
+
+        <section id="fields">
+          <h2>2. 字段总览</h2>
+          <p>以下字段全部来自 <code>createFiber()</code> 的返回值，按职责分组：</p>
+          <table>
+            <thead><tr><th>字段</th><th>含义</th><th>谁在读 / 写</th></tr></thead>
+            <tbody>
+              <tr><td>tag</td><td>节点类型枚举：<code>0</code> 函数组件、<code>1</code> HostRoot、<code>2</code> 宿主元素、<code>3</code> 文本。由 <code>inferTag(type)</code> 推断。</td><td><code>beginWork</code> 分支、<code>completeWork</code>、<code>commitWork</code></td></tr>
+              <tr><td>type</td><td>函数组件是函数本身；宿主组件是标签名字符串；文本节点是 <code>REACT_TEXT_ELEMENT_TYPE</code>；根节点为 <code>null</code>。</td><td>协调时比较 <code>oldFiber.type === element.type</code>；<code>createInstance(type, props)</code></td></tr>
+              <tr><td>key</td><td>协调时配合 <code>type</code> 判断能否复用，这里按索引 + key 比较。</td><td><code>reconcileChildren</code></td></tr>
+              <tr><td>pendingProps</td><td>本次渲染新传入的 props，等待被处理。</td><td><code>beginWork</code> 读取 children；<code>commitUpdate</code> 写入 DOM</td></tr>
+              <tr><td>memoizedProps</td><td>上一次已完成渲染的 props，创建 WIP 时从 current 复制。</td><td><code>createWorkInProgress</code></td></tr>
+              <tr><td>return</td><td>指向父 Fiber，事件冒泡、Hooks 找 Root、commit 找宿主父节点都靠它。</td><td><code>getRootFromFiber</code>、<code>getHostParentFiber</code></td></tr>
+              <tr><td>child</td><td>指向第一个子 Fiber，只有一个「长子」。</td><td><code>performUnitOfWork</code>、<code>commitWork</code></td></tr>
+              <tr><td>sibling</td><td>指向下一个兄弟 Fiber，兄弟之间不通过父节点间接访问。</td><td>工作循环回溯时切换下一个工作单元</td></tr>
+              <tr><td>stateNode</td><td>宿主实例：HostComponent / HostText 为真实 DOM 节点；HostRoot 为 <code>FiberRoot</code>；函数组件为 <code>null</code>。</td><td><code>completeWork</code> 创建、<code>commitWork</code> 操作 DOM</td></tr>
+              <tr><td>alternate</td><td>指向另一棵树上的同一节点，是双缓冲复用的入口。</td><td><code>createWorkInProgress</code>、Hooks 判断 mount/update</td></tr>
+              <tr><td>memoizedState</td><td>函数组件的 Hooks 链表头节点；类组件或宿主节点为 <code>null</code>。</td><td><code>mountWorkInProgressHook</code> / <code>updateWorkInProgressHook</code></td></tr>
+              <tr><td>effectTag</td><td>副作用标记：<code>PLACEMENT</code> 插入、<code>UPDATE</code> 更新、<code>DELETION</code> 删除。</td><td><code>reconcileChildren</code> 打标，<code>commitWork</code> 执行</td></tr>
+              <tr><td>deletions</td><td>本节点协调出的待删除 Fiber 列表，commit 时先统一删除。</td><td><code>reconcileChildren</code> 写入，<code>collectDeletions</code> 读取</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="data-structure">
+          <h2>3. Fiber 树的数据结构</h2>
+          <p>Fiber 树并不是「父节点持有 children 数组」的普通树，而是由 Fiber 对象通过 <code>child / sibling / return</code> 三个指针连成的<strong>有序链表树</strong>。</p>
+
+          <h3>三个核心指针</h3>
+          <table>
+            <thead><tr><th>指针</th><th>指向</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>child</td><td>第一个子 Fiber</td><td>一个父节点只保存「长子」，其余子节点不放在数组里。</td></tr>
+              <tr><td>sibling</td><td>下一个兄弟 Fiber</td><td>兄弟节点横向串联，最后一个兄弟的 <code>sibling</code> 为 <code>null</code>。</td></tr>
+              <tr><td>return</td><td>父 Fiber</td><td>是 Fiber 树上的父节点，不一定是最近的 DOM 父节点；函数组件会被跳过。</td></tr>
+            </tbody>
+          </table>
+
+          <h3>拓扑示例</h3>
+          <pre><code>HostRoot
+  └─ child → div
+               └─ child → h1 ──sibling──→ p
+                            │              │
+                          child          child
+                            ↓              ↓
+                          text1          text2
+
+指针关系：
+hostRoot.child = div;  div.return = hostRoot;
+div.child = h1;        h1.return = div;
+h1.sibling = p;        p.return = div;
+h1.child = text1;      text1.return = h1;
+p.child = text2;       text2.return = p;</code></pre>
+
+          <h3>根节点与 FiberRoot</h3>
+          <p>Root 不是普通 Fiber，而是一个额外的 <code>FiberRoot</code> 对象，它与 HostRoot Fiber 互相引用：</p>
+          <pre><code>export function createFiberRoot(containerInfo) {
+  const root = { containerInfo, current: null, finishedWork: null };
+  const hostRootFiber = createHostRootFiber();
+  hostRootFiber.stateNode = root;   // Fiber → FiberRoot
+  root.current = hostRootFiber;     // FiberRoot → 当前 Fiber 树
+  return root;
+}</code></pre>
+          <p>这样任意子 Fiber 沿 <code>return</code> 一路向上都能找到 <code>FiberRoot</code>；Hooks 的 <code>setState</code> 正是通过这条链触发调度。</p>
+
+          <h3>为什么用这种结构</h3>
+          <ul>
+            <li><strong>可中断遍历</strong>：工作循环只需一个 <code>nextUnitOfWork</code> 指针，沿 <code>child / sibling / return</code> 推进，不依赖递归调用栈。</li>
+            <li><strong>统一子节点处理</strong>：无论 JSX 里写几个孩子，Fiber 层统一看成「第一个 child + 一串 sibling」。</li>
+            <li><strong>便于复用</strong>：协调时逐项比较 <code>oldFiber</code> 与 <code>element</code>，同 <code>type/key</code> 就通过 <code>alternate</code> 复用节点。</li>
+            <li><strong>提交顺序清晰</strong>：删除用 <code>deletions</code> 列表，插入/更新按 <code>child → sibling</code> 深度优先执行。</li>
+          </ul>
+          <div class="callout">遍历口诀：<code>beginWork</code> 后若有 <code>child</code> 就向下；没有则 <code>completeWork</code>，有 <code>sibling</code> 转兄弟，否则沿 <code>return</code> 上升，直到回到根且无兄弟。</div>
+        </section>
+
+        <section id="tree">
+          <h2>4. 结构与交互演示</h2>
+          <p>下面是 <code>HostRoot → div → (h1, p) → 文本</code> 的 Fiber 结构。点击任意节点查看字段；点击「下一步」观察一次更新如何创建 WIP、复用节点并提交。</p>
+          <div class="toolbar">
+            <button class="action" id="nextBtn" type="button">下一步：创建 WIP</button>
+            <button class="action ghost" id="resetBtn" type="button">重置演示</button>
+            <span class="phase-badge" id="phaseBadge">初始状态：root.current → current 树</span>
+          </div>
+          <div class="tree-stage">
+            <div class="tree-panel">
+              <h3>current 树（已提交）</h3>
+              <div class="hint">真实 DOM 对应这棵树，root.current 指向它的 HostRoot。</div>
+              <div id="currentTree"></div>
+            </div>
+            <div class="tree-panel">
+              <h3>workInProgress 树（构建中）</h3>
+              <div class="hint">更新时新建，构建完成后交给 commit，随后成为新的 current。</div>
+              <div id="wipTree"></div>
+            </div>
+          </div>
+          <div class="inspector" id="inspector"></div>
+          <ol class="log" id="log"></ol>
+        </section>
+
+        <section id="double-buffer">
+          <h2>5. 双缓存（Double Buffering）机制原理</h2>
+          <p>双缓存的核心是：<strong>内存中同时保留两棵 Fiber 树</strong>。一棵是已经提交、与屏幕 DOM 对应的 <code>current</code> 树；另一棵是在后台构建的 <code>workInProgress</code>（WIP）树。render 阶段只在 WIP 上工作，不碰真实 DOM；直到 commit 阶段才一次性把变更落地，并切换 <code>root.current</code>。</p>
+
+          <h3>① 两棵树的关系</h3>
+          <table>
+            <thead><tr><th>维度</th><th>current 树</th><th>workInProgress 树</th></tr></thead>
+            <tbody>
+              <tr><td>可见性</td><td>已提交，对应屏幕上的 DOM</td><td>内存中的草稿，用户看不到中间状态</td></tr>
+              <tr><td>数据来源</td><td>上一次提交的 <code>memoizedProps</code></td><td>本轮新的 <code>pendingProps</code></td></tr>
+              <tr><td>可中断性</td><td>已稳定，不可丢弃</td><td>可被中断、丢弃，不影响屏幕</td></tr>
+              <tr><td>指针</td><td><code>FiberRoot.current</code> 指向它</td><td>通过 <code>alternate</code> 与 current 互相指向</td></tr>
+              <tr><td>提交后</td><td>变成下一轮 WIP 的候选</td><td>成为新的 current 树</td></tr>
+            </tbody>
+          </table>
+          <pre><code>FiberRoot.current ──→ current 树 A（已提交，屏幕所见）
+                          │
+                        alternate（互相指向）
+                          ↓
+                     workInProgress 树 B（构建中，不可见）</code></pre>
+
+          <h3>② 一次更新的完整时间线</h3>
+          <ol>
+            <li><strong>更新前</strong>：<code>root.current</code> 指向树 A；树 A 的 <code>alternate</code> 为 <code>null</code>（首次更新时）或指向上一次被替换下来的树。</li>
+            <li><strong>render 阶段</strong>：<code>renderRootSync</code> 调用 <code>createWorkInProgress(current)</code> 得到 WIP 根；<code>beginWork / reconcileChildren</code> 在 WIP 上建立 <code>child / sibling</code> 链，并标记 <code>effectTag</code>。此时真实 DOM 完全没变。</li>
+            <li><strong>commit 阶段</strong>：<code>commitRoot</code> 先收集并处理 <code>deletions</code>，再按 <code>PLACEMENT / UPDATE</code> 操作 DOM，最后执行 <code>root.current = finishedWork</code>。</li>
+            <li><strong>提交后</strong>：树 B 成为新的 current；树 A 通过 <code>alternate</code> 留下来，成为下一次更新的 WIP 候选。两棵树角色互换，对象不销毁。</li>
+          </ol>
+          <pre><code>状态 1（首次提交后）
+  FiberRoot.current → 树 A
+  树 A.alternate = null
+
+状态 2（第 N 次更新 · render）
+  createWorkInProgress(A) → 新建 WIP 根 B
+  A.alternate = B，B.alternate = A
+  B 从 A 复制 stateNode / memoizedState，清空 child / sibling / effectTag
+  reconcileChildren 在 B 上建树、打标
+
+状态 3（commit）
+  collectDeletions(B) → 删除旧节点
+  commitWork(B.child) → PLACEMENT / UPDATE 映射到 DOM
+  root.current = B
+
+状态 4（提交后）
+  FiberRoot.current → 树 B
+  B.alternate = A（A 成为下一轮 WIP 候选）</code></pre>
+
+          <h3>③ 节点级复用：createWorkInProgress</h3>
+          <p>双缓存不是「整棵树全部重建」，而是<strong>逐节点复用 alternate 对象</strong>。同一个 Fiber 位置在两棵树中各有一个对象，更新时把旧对象改造成新一轮的 WIP：</p>
+          <table>
+            <thead><tr><th>处理方式</th><th>字段</th><th>原因</th></tr></thead>
+            <tbody>
+              <tr><td>保留</td><td><code>stateNode</code></td><td>沿用真实 DOM 节点，避免重建导致焦点、滚动位置丢失</td></tr>
+              <tr><td>保留</td><td><code>memoizedState</code></td><td>Hooks 状态链表和更新队列延续，组件状态不丢失</td></tr>
+              <tr><td>复制</td><td><code>memoizedProps</code></td><td>作为上一次已提交属性的基准</td></tr>
+              <tr><td>覆盖</td><td><code>type / key / return / pendingProps</code></td><td>反映本轮元素类型、父节点与待处理属性</td></tr>
+              <tr><td>重置</td><td><code>child / sibling / effectTag / deletions</code></td><td>新一轮协调会重新生成子树结构与副作用标记</td></tr>
+            </tbody>
+          </table>
+          <pre><code>export function createWorkInProgress(current, pendingProps = current.pendingProps, returnFiber = current.return) {
+  let workInProgress = current.alternate;
+  if (workInProgress === null) {
+    workInProgress = createFiber(current.tag, current.type, current.key, pendingProps, returnFiber, current.stateNode);
+    workInProgress.alternate = current;
+    current.alternate = workInProgress;
+  } else {
+    workInProgress.type = current.type;
+    workInProgress.key = current.key;
+    workInProgress.return = returnFiber;
+    workInProgress.stateNode = current.stateNode;
+    workInProgress.pendingProps = pendingProps;
+  }
+
+  workInProgress.memoizedProps = current.memoizedProps;
+  workInProgress.memoizedState = current.memoizedState;
+  workInProgress.child = null;
+  workInProgress.sibling = null;
+  workInProgress.effectTag = null;
+  workInProgress.deletions = [];
+  return workInProgress;
+}</code></pre>
+          <p>注意 <code>alternate</code> 互指只在第一次建立；后续更新直接复用那个旧 WIP 对象。因此连续更新时，两棵树的节点对象数量保持稳定，不会无限增长。</p>
+
+          <h3>④ 为什么必须有双缓存</h3>
+          <ul>
+            <li><strong>可中断渲染</strong>：render 在 WIP 上进行，若被调度器打断或渲染出错，屏幕仍是完整的旧树，不会出现半成品 UI；恢复时继续处理 WIP 即可。</li>
+            <li><strong>提供 diff 基准</strong>：只有同时保留旧树，<code>reconcileChildren</code> 才能取 <code>workInProgress.alternate.child</code> 与新的 element 逐项比较 <code>type/key</code>，决定 <code>UPDATE / PLACEMENT / DELETION</code>。</li>
+            <li><strong>复用实例与状态</strong>：<code>stateNode</code> 让 DOM 不重建，<code>memoizedState</code> 让 Hooks 状态延续，避免组件每次更新都回到初始状态。</li>
+            <li><strong>提交集中且一致</strong>：所有 DOM 变更集中在 commit 阶段完成，最后一步才切换 <code>root.current</code>，用户看到的是一致的新状态。</li>
+            <li><strong>如果只改一棵树</strong>：会失去比较基准、无法保留旧状态，并且渲染过程中可能产生用户可见的中间态。</li>
+          </ul>
+
+          <h3>⑤ 与协调、Hooks、提交的衔接</h3>
+          <ul>
+            <li><strong>render 入口</strong>：<code>renderRootSync</code> 中 <code>const workInProgress = createWorkInProgress(current, current.pendingProps, null)</code>，整轮工作都围绕这棵 WIP 展开。</li>
+            <li><strong>协调</strong>：<code>reconcileChildren</code> 从 <code>workInProgress.alternate.child</code> 取旧 Fiber 链；可复用则标记 <code>UPDATE</code>，否则新建并标记 <code>PLACEMENT</code>，旧 Fiber 进入 <code>deletions</code>。</li>
+            <li><strong>Hooks</strong>：<code>renderWithHooks</code> 用 <code>alternate === null</code> 判断是首次挂载还是更新；<code>updateWorkInProgressHook</code> 沿 WIP 的 <code>alternate.memoizedState</code> 按调用顺序取回上次状态。</li>
+            <li><strong>提交</strong>：<code>commitRoot</code> 执行删除、插入、更新后，把 <code>root.finishedWork</code> 记为 WIP，并令 <code>root.current = finishedWork</code>，完成角色互换。</li>
+          </ul>
+          <pre><code>function commitRoot(root, finishedWork) {
+  const deletions = [];
+  collectDeletions(finishedWork, deletions);
+  for (const deletion of deletions) {
+    commitDeletion(deletion, root.containerInfo);
+  }
+  commitWork(finishedWork.child, root.containerInfo);
+  root.finishedWork = finishedWork;
+  root.current = finishedWork;
+}</code></pre>
+          <div class="callout">副作用标记的生命周期：<code>effectTag</code> 在 render 阶段写到 WIP 上，commit 阶段读取并执行；它不会在 commit 中清空，而是在该节点下一次被 <code>createWorkInProgress</code> 复用时重置为 <code>null</code>。这也是双缓存「两棵树交替复用」的直接体现。</div>
+        </section>
+
+        <section id="workloop">
+          <h2>6. Fiber 循环遍历算法</h2>
+          <p>Fiber 的循环遍历本质是一次<strong>不用递归、可暂停的深度优先遍历</strong>。它只靠 <code>child / sibling / return</code> 三个指针推进，用一个 <code>nextUnitOfWork</code> 指针记住「下一个要处理的节点」。</p>
+
+          <h3>① 三层循环</h3>
+          <table>
+            <thead><tr><th>层级</th><th>代码位置</th><th>作用</th></tr></thead>
+            <tbody>
+              <tr><td>调度循环</td><td><code>flushScheduledRoots</code></td><td>从待更新 root 集合中取出 root，逐个执行 render + commit</td></tr>
+              <tr><td>render 遍历</td><td><code>renderRootSync</code> + <code>performUnitOfWork</code></td><td>构建 WIP 树，给节点打 <code>effectTag</code></td></tr>
+              <tr><td>commit 遍历</td><td><code>commitRoot</code> + <code>commitWork</code></td><td>把 <code>effectTag</code> 翻译成 DOM 操作</td></tr>
+            </tbody>
+          </table>
+          <pre><code>function renderRootSync(root) {
+  const current = root.current;
+  const workInProgress = createWorkInProgress(current, current.pendingProps, null);
+  let nextUnitOfWork = workInProgress;
+  while (nextUnitOfWork !== null) {
+    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+  }
+  return workInProgress;
+}</code></pre>
+          <p>关键点是：<code>nextUnitOfWork</code> 是一个<strong>可保存的单一指针</strong>。每处理完一个 Fiber，函数就返回下一个 Fiber；调度器完全可以在两次调用之间暂停。</p>
+
+          <h3>② 核心算法：performUnitOfWork</h3>
+          <pre><code>function performUnitOfWork(fiber) {
+  beginWork(fiber);
+  if (fiber.child !== null) {
+    return fiber.child;
+  }
+  let completedFiber = fiber;
+  while (completedFiber !== null) {
+    completeWork(completedFiber);
+    if (completedFiber.sibling !== null) {
+      return completedFiber.sibling;
+    }
+    completedFiber = completedFiber.return;
+  }
+  return null;
+}</code></pre>
+          <p>拆开看只有两条路径：</p>
+          <h4>路径 A：有 child，就继续向下</h4>
+          <pre><code>beginWork(fiber);
+if (fiber.child !== null) {
+  return fiber.child;
+}</code></pre>
+          <p><code>beginWork</code> 会执行组件、协调 children，并设置 <code>fiber.child</code> 和兄弟链。只要还有第一个孩子，就把孩子作为下一个工作单元。</p>
+          <h4>路径 B：没有 child，就完成并回溯</h4>
+          <pre><code>let completedFiber = fiber;
+while (completedFiber !== null) {
+  completeWork(completedFiber);
+  if (completedFiber.sibling !== null) {
+    return completedFiber.sibling;
+  }
+  completedFiber = completedFiber.return;
+}</code></pre>
+          <ol>
+            <li>调用 <code>completeWork</code> 完成该节点（新宿主节点在这里创建 DOM 实例）。</li>
+            <li>有 <code>sibling</code> → 转到兄弟节点，继续处理兄弟子树。</li>
+            <li>没有 <code>sibling</code> → 沿 <code>return</code> 回到父节点，重复上述过程。</li>
+            <li>一直回到根且根也没有兄弟 → <code>completedFiber</code> 变为 <code>null</code>，整棵树遍历结束。</li>
+          </ol>
+          <div class="callout">口诀：<strong>先 child，后 sibling，再 return；向下 beginWork，向上 completeWork。</strong></div>
+
+          <h3>③ 完整遍历示例</h3>
+          <pre><code>HostRoot
+  └─ div
+       ├─ h1
+       │   └─ text1
+       └─ p
+           └─ text2</code></pre>
+          <table>
+            <thead><tr><th>轮次</th><th>当前 Fiber</th><th>beginWork 后</th><th>后续动作</th><th>下一个工作单元</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td><code>HostRoot</code></td><td>生成 <code>child = div</code></td><td>有 child，直接向下</td><td><code>div</code></td></tr>
+              <tr><td>2</td><td><code>div</code></td><td>生成 <code>child = h1</code>，<code>h1.sibling = p</code></td><td>有 child，直接向下</td><td><code>h1</code></td></tr>
+              <tr><td>3</td><td><code>h1</code></td><td>生成 <code>child = text1</code></td><td>有 child，直接向下</td><td><code>text1</code></td></tr>
+              <tr><td>4</td><td><code>text1</code></td><td>文本节点无 child</td><td><code>completeWork(text1)</code>；无 sibling → 回到 <code>h1</code>；<code>completeWork(h1)</code>；<code>h1.sibling = p</code></td><td><code>p</code></td></tr>
+              <tr><td>5</td><td><code>p</code></td><td>生成 <code>child = text2</code></td><td>有 child，直接向下</td><td><code>text2</code></td></tr>
+              <tr><td>6</td><td><code>text2</code></td><td>无 child</td><td><code>completeWork(text2)</code>；回 <code>p</code> → <code>completeWork(p)</code>；回 <code>div</code> → <code>completeWork(div)</code>；回 <code>HostRoot</code> → <code>completeWork(HostRoot)</code>；根无 return</td><td><code>null</code>，结束</td></tr>
+            </tbody>
+          </table>
+          <ul>
+            <li><strong>兄弟节点在整棵子树完成后才访问</strong>：<code>p</code> 是在 <code>h1</code> 整个子树（含 <code>text1</code>）完成后的第 4 轮末尾才被选中。</li>
+            <li><strong>每个 Fiber 的 <code>completeWork</code> 只调用一次</strong>：<code>h1</code> 的 complete 发生在从 <code>text1</code> 回溯时，而不是在 <code>beginWork(h1)</code> 之后立刻调用。</li>
+          </ul>
+
+          <h3>④ 为什么用 return 当隐式栈</h3>
+          <p>递归遍历写起来更简单，但有两个问题：</p>
+          <pre><code>function walk(fiber) {
+  beginWork(fiber);
+  if (fiber.child) walk(fiber.child);
+  completeWork(fiber);
+  if (fiber.sibling) walk(fiber.sibling);
+}</code></pre>
+          <ul>
+            <li><strong>调用栈不能暂停</strong>：浏览器无法在中途保存 JS 调用栈，做不到时间切片。</li>
+            <li><strong>深树可能爆栈</strong>：递归层数受 JS 调用栈限制。</li>
+          </ul>
+          <p>Fiber 把「栈」信息存进节点本身：<code>return</code> 相当于递归返回地址，<code>sibling</code> 相当于当前层还没处理完的后续任务，<code>nextUnitOfWork</code> 相当于程序计数器。因此遍历状态只有一个指针，随时可以中断和恢复。教学版用同步 <code>while</code> 循环跑完，但结构已具备可中断条件。</p>
+
+          <h3>⑤ beginWork 与 completeWork 的分工</h3>
+          <pre><code>export function beginWork(workInProgress) {
+  switch (workInProgress.tag) {
+    case HostRoot:
+      reconcileChildren(workInProgress, workInProgress.pendingProps.children);
+      return;
+    case FunctionComponent: {
+      renderWithHooks(workInProgress);
+      const children = workInProgress.type(workInProgress.pendingProps);
+      resetHooks();
+      reconcileChildren(workInProgress, children);
+      return;
+    }
+    case HostComponent:
+      reconcileChildren(workInProgress, workInProgress.pendingProps.children);
+      return;
+    default:
+      return;
+  }
+}</code></pre>
+          <ul>
+            <li><code>beginWork</code>：<strong>自顶向下</strong>，执行组件函数、协调子节点、生成 <code>child/sibling</code> 链、打 <code>effectTag</code>。</li>
+            <li><code>completeWork</code>：<strong>自底向上</strong>，只为新建的 <code>HostComponent / HostText</code> 创建真实 DOM 实例；复用节点跳过。</li>
+          </ul>
+          <p>DOM 实例的创建发生在「回溯」阶段，而不是「下降」阶段。</p>
+
+          <h3>⑥ 被遍历的链表由谁生成</h3>
+          <pre><code>if (previousFiber === null) {
+  workInProgress.child = newFiber;
+} else {
+  previousFiber.sibling = newFiber;
+}
+previousFiber = newFiber;
+oldFiber = oldFiber.sibling;</code></pre>
+          <p><code>reconcileChildren</code> 按索引逐个比较 <code>oldFiber</code> 与 <code>element</code>：</p>
+          <ul>
+            <li><code>type/key</code> 相同 → <code>createWorkInProgress</code> 复用，标记 <code>UPDATE</code></li>
+            <li>不同 → <code>createFiberFromElement</code> 新建，标记 <code>PLACEMENT</code>，旧节点进入 <code>deletions</code></li>
+            <li>新 children 更短 → 剩余旧 Fiber 全部标记 <code>DELETION</code></li>
+          </ul>
+          <p>所以遍历算法本身不关心「children 数组」，它只认识 <code>child</code> 和 <code>sibling</code>。</p>
+
+          <h3>⑦ commit 阶段的遍历不同</h3>
+          <p>render 遍历是「可中断、可丢弃」的；commit 遍历是<strong>同步执行、不可中断</strong>的，而且不再沿 <code>return</code> 回溯：</p>
+          <pre><code>function commitWork(fiber, rootContainer) {
+  if (fiber.tag === HostComponent || fiber.tag === HostText) {
+    const parentNode = getParentNode(fiber, rootContainer);
+    setFiberForNode(fiber.stateNode, fiber);
+
+    if (fiber.effectTag === PLACEMENT) {
+      if (parentNode === rootContainer) {
+        appendChildToContainer(rootContainer, fiber.stateNode);
+      } else {
+        parentNode.appendChild(fiber.stateNode);
+      }
+    } else if (fiber.effectTag === UPDATE) {
+      if (fiber.tag === HostText) {
+        commitTextUpdate(fiber.stateNode, fiber.alternate.pendingProps.content, fiber.pendingProps.content);
+      } else {
+        commitUpdate(fiber.stateNode, fiber.pendingProps);
+      }
+    }
+  }
+
+  let child = fiber.child;
+  while (child !== null) {
+    commitWork(child, rootContainer);
+    child = child.sibling;
+  }
+}</code></pre>
+          <ul>
+            <li>render 遍历需要 <code>return</code> 来回溯并完成父节点；commit 遍历只沿 <code>child → sibling</code> 深度优先下降。</li>
+            <li>需要父 DOM 时，用 <code>getHostParentFiber(fiber)</code> 沿 <code>return</code> 向上找最近的宿主父 Fiber（跳过函数组件）。</li>
+            <li>删除操作不在 <code>commitWork</code> 里：<code>collectDeletions</code> 先递归收集 <code>deletions</code>，统一先删除再插入/更新。</li>
+          </ul>
+
+          <h3>⑧ 复杂度与关键性质</h3>
+          <ul>
+            <li>每个 Fiber 在 render 阶段被访问<strong>恰好一次</strong>，时间复杂度 <code>O(n)</code>。</li>
+            <li>空间上不需要额外的递归栈，靠 <code>return</code> 复用树结构，空间为 <code>O(1)</code> 额外指针。</li>
+            <li><code>beginWork</code> 是前序遍历，<code>completeWork</code> 是后序遍历，一次循环同时完成两种顺序。</li>
+            <li>中断后恢复只需保留 <code>nextUnitOfWork</code>，不需要重头开始。</li>
+            <li>commit 阶段不可中断，保证 DOM 变更一次性完成。</li>
+          </ul>
+          <div class="callout">一句话总结：Fiber 循环遍历就是把递归 DFS 拆成「一个 Fiber 一个工作单元」——有 child 就向下，没 child 就 complete 并借 <code>sibling</code> 横向移动，没有 sibling 就沿 <code>return</code> 上升，直到回到根；整个过程由一个可保存的 <code>nextUnitOfWork</code> 指针驱动。</div>
+        </section>
+
+        <section id="api">
+          <h2>7. 使用方法（API）</h2>
+          <p>模块对外导出 5 个工厂函数，实际项目中通常不直接手写 Fiber，而是由 reconciler 自动调用；但调试与扩展时按下面方式使用：</p>
+          <h3>① createFiber：底层构造</h3>
+          <pre><code>createFiber(tag, type, key, pendingProps, returnFiber, stateNode = null)</code></pre>
+          <p>手动构造一个节点时，至少要传 <code>tag/type/key/pendingProps/return</code>。<code>child</code>、<code>sibling</code>、<code>alternate</code> 初始为 <code>null</code>，由后续阶段补齐。</p>
+
+          <h3>② createFiberFromElement / createFiberFromText：由内容创建</h3>
+          <pre><code>export function createFiberFromElement(element, returnFiber) {
+  return createFiber(inferTag(element.type), element.type, element.key, element.props, returnFiber);
+}
+
+export function createFiberFromText(content, returnFiber) {
+  return createFiber(HostText, REACT_TEXT_ELEMENT_TYPE, null, { content: String(content) }, returnFiber);
+}</code></pre>
+          <p><code>reconcileChildren</code> 中：可复用时走 <code>createWorkInProgress(oldFiber, element.props, parent)</code> 并标记 <code>UPDATE</code>；不可复用时走 <code>createFiberFromElement</code> 并标记 <code>PLACEMENT</code>，旧 Fiber 标记 <code>DELETION</code> 后推入 <code>deletions</code>。</p>
+
+          <h3>③ createHostRootFiber + createFiberRoot：建立根</h3>
+          <pre><code>const root = { containerInfo, current: null, finishedWork: null };
+const hostRootFiber = createHostRootFiber();      // tag = HostRoot
+hostRootFiber.stateNode = root;                   // Fiber → FiberRoot
+root.current = hostRootFiber;                     // FiberRoot → 当前 Fiber 树</code></pre>
+
+          <h3>④ createWorkInProgress：每次更新复用</h3>
+          <pre><code>const current = root.current;
+const workInProgress = createWorkInProgress(current, current.pendingProps, null);
+// workInProgress.alternate === current
+// workInProgress.stateNode === current.stateNode（DOM 不重建）</code></pre>
+
+          <h3>⑤ 连接父子与兄弟</h3>
+          <pre><code>workInProgress.child = firstChild;       // 第一个孩子
+firstChild.return = workInProgress;      // 指回父亲
+firstChild.sibling = secondChild;        // 下一个兄弟
+secondChild.return = workInProgress;</code></pre>
+          <div class="callout">完整链路：<code>createContainer → createFiberRoot</code> 建立根；<code>setState → scheduleUpdateOnFiber → renderRootSync</code> 创建 WIP；<code>beginWork/reconcileChildren</code> 连接树并打标；<code>completeWork</code> 创建宿主实例；<code>commitRoot</code> 把标记映射到 DOM 并切换 <code>root.current</code>。</div>
+        </section>
+
+        <section id="pitfalls">
+          <h2>8. 易错点</h2>
+          <ul>
+            <li><strong>函数组件没有 stateNode</strong>：commit 阶段用 <code>getHostParentFiber</code> 沿 <code>return</code> 跳过函数组件，找最近的宿主父节点。</li>
+            <li><strong>child 不是 children 数组</strong>：所有子节点通过 <code>sibling</code> 横向串联，遍历时要 <code>while (fiber.sibling !== null)</code>。</li>
+            <li><strong>先删后改</strong>：<code>commitRoot</code> 先处理 <code>deletions</code>，再执行插入和更新，避免删掉刚插入的节点。</li>
+            <li><strong>pendingProps 与 memoizedProps 不能混用</strong>：前者是本次要渲染的，后者是上次已提交的；状态更新比较应基于正确的那一侧。</li>
+            <li><strong>Hooks 依赖顺序</strong>：<code>memoizedState</code> 是链表，<code>useState</code> 调用顺序变化会读到错误的 Hook；更新时 <code>alternate</code> 是否存在决定 mount 还是 update dispatcher。</li>
+            <li><strong>effectTag 不会在 commit 中清空</strong>：下次 <code>createWorkInProgress</code> 复用时才重置为 <code>null</code>，不要假设提交后节点标记自动消失。</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      (function () {
+        var TAGS = { 0: 'FunctionComponent', 1: 'HostRoot', 2: 'HostComponent', 3: 'HostText' };
+        var TEXT = Symbol.for('react.text');
+        var uid = 0;
+
+        function makeFiber(tag, type, key, pendingProps, stateNode) {
+          return {
+            id: ++uid,
+            tag: tag,
+            type: type,
+            key: key,
+            pendingProps: pendingProps,
+            memoizedProps: Object.assign({}, pendingProps),
+            return: null,
+            child: null,
+            sibling: null,
+            stateNode: stateNode === undefined ? null : stateNode,
+            alternate: null,
+            memoizedState: null,
+            effectTag: null,
+            deletions: []
+          };
+        }
+
+        function linkChildren(parent, children) {
+          parent.child = children.length > 0 ? children[0] : null;
+          children.forEach(function (child, index) {
+            child.return = parent;
+            child.sibling = index + 1 < children.length ? children[index + 1] : null;
+          });
+        }
+
+        function cloneWip(current, returnFiber) {
+          var wip = makeFiber(current.tag, current.type, current.key, Object.assign({}, current.pendingProps), current.stateNode);
+          wip.return = returnFiber || null;
+          wip.alternate = current;
+          current.alternate = wip;
+          wip.memoizedProps = Object.assign({}, current.memoizedProps);
+          wip.memoizedState = current.memoizedState;
+          return wip;
+        }
+
+        function buildInitialCurrent() {
+          var root = makeFiber(1, null, null, { children: null }, { containerInfo: '#root' });
+          var div = makeFiber(2, 'div', null, { className: 'card', children: null }, 'DOM <div class="card">');
+          var h1 = makeFiber(2, 'h1', null, { children: null }, 'DOM <h1>');
+          var title = makeFiber(3, TEXT, null, { content: 'Mini React' }, 'Text "Mini React"');
+          var p = makeFiber(2, 'p', null, { children: null }, 'DOM <p>');
+          var desc = makeFiber(3, TEXT, null, { content: 'Fiber 双缓冲' }, 'Text "Fiber 双缓冲"');
+          linkChildren(root, [div]);
+          linkChildren(div, [h1, p]);
+          linkChildren(h1, [title]);
+          linkChildren(p, [desc]);
+          return root;
+        }
+
+        var currentRoot = buildInitialCurrent();
+        var wipRoot = null;
+        var step = 0;
+        var selected = null;
+
+        var phaseText = [
+          '初始状态：root.current → current 树',
+          '步骤 1：createWorkInProgress(root) 创建 WIP 根',
+          '步骤 2：reconcileChildren 复用并连接子节点',
+          '步骤 3：pendingProps 改变，effectTag = UPDATE',
+          '步骤 4：commitRoot 完成，root.current 切换'
+        ];
+        var buttonText = [
+          '下一步：创建 WIP',
+          '下一步：协调子节点',
+          '下一步：修改文本',
+          '下一步：提交更新',
+          '重新演示'
+        ];
+
+        function shortName(fiber) {
+          if (fiber.tag === 1) return 'HostRoot';
+          if (fiber.tag === 2) return '<' + fiber.type + '>';
+          if (fiber.tag === 3) return 'Text "' + fiber.pendingProps.content + '"';
+          return 'FunctionComponent';
+        }
+
+        function refName(fiber) {
+          if (!fiber) return 'null';
+          return '#' + fiber.id + ' ' + TAGS[fiber.tag] + ' (' + shortName(fiber) + ')';
+        }
+
+        function propsSummary(fiber) {
+          if (fiber.tag === 1) return 'stateNode → FiberRoot';
+          if (fiber.tag === 3) return 'content: "' + fiber.pendingProps.content + '"';
+          if (fiber.tag === 2 && fiber.pendingProps.className) return 'class: "' + fiber.pendingProps.className + '"';
+          return 'pendingProps';
+        }
+
+        function display(value) {
+          if (value === null) return 'null';
+          if (typeof value === 'symbol') return value.toString();
+          if (typeof value === 'object') {
+            if (value.containerInfo) return '{ containerInfo: "' + value.containerInfo + '" }';
+            return JSON.stringify(value);
+          }
+          return String(value);
+        }
+
+        function fields(fiber) {
+          return [
+            ['tag', fiber.tag + ' (' + TAGS[fiber.tag] + ')'],
+            ['type', display(fiber.type)],
+            ['key', display(fiber.key)],
+            ['pendingProps', display(fiber.pendingProps)],
+            ['memoizedProps', display(fiber.memoizedProps)],
+            ['return', refName(fiber.return)],
+            ['child', refName(fiber.child)],
+            ['sibling', refName(fiber.sibling)],
+            ['stateNode', display(fiber.stateNode)],
+            ['alternate', refName(fiber.alternate)],
+            ['memoizedState', display(fiber.memoizedState)],
+            ['effectTag', display(fiber.effectTag)],
+            ['deletions.length', String(fiber.deletions.length)]
+          ];
+        }
+
+        function isSelected(fiber) {
+          return fiber === selected || (fiber.alternate !== null && fiber.alternate === selected);
+        }
+
+        function renderNode(fiber) {
+          var wrap = document.createElement('div');
+          wrap.className = 'node-wrap';
+
+          var card = document.createElement('button');
+          card.type = 'button';
+          card.className = 'node tag-' + fiber.tag + (fiber.effectTag ? ' effect-' + fiber.effectTag : '') + (isSelected(fiber) ? ' selected' : '');
+
+          var tag = document.createElement('span');
+          tag.className = 'tag';
+          tag.textContent = TAGS[fiber.tag];
+
+          var name = document.createElement('strong');
+          name.textContent = shortName(fiber);
+
+          var meta = document.createElement('small');
+          meta.textContent = propsSummary(fiber);
+
+          card.appendChild(tag);
+          card.appendChild(name);
+          card.appendChild(meta);
+          card.addEventListener('click', function () {
+            selected = fiber;
+            renderAll();
+          });
+          wrap.appendChild(card);
+
+          if (fiber.child !== null) {
+            var children = document.createElement('div');
+            children.className = 'children';
+            var child = fiber.child;
+            while (child !== null) {
+              children.appendChild(renderNode(child));
+              child = child.sibling;
+            }
+            wrap.appendChild(children);
+          }
+          return wrap;
+        }
+
+        function renderTree(elementId, root) {
+          var container = document.getElementById(elementId);
+          container.textContent = '';
+          if (root === null) {
+            var empty = document.createElement('div');
+            empty.className = 'empty';
+            empty.textContent = '尚未创建 workInProgress';
+            container.appendChild(empty);
+            return;
+          }
+          container.appendChild(renderNode(root));
+        }
+
+        function renderInspector() {
+          var box = document.getElementById('inspector');
+          box.textContent = '';
+          var heading = document.createElement('h3');
+          heading.textContent = selected ? '节点详情 · ' + shortName(selected) : '节点详情 · 点击上方任意节点';
+          box.appendChild(heading);
+
+          if (!selected) {
+            var tip = document.createElement('p');
+            tip.className = 'muted';
+            tip.textContent = '字段会随着演示步骤变化，选中节点后可以观察 pendingProps、effectTag 和 alternate 的更新。';
+            box.appendChild(tip);
+            return;
+          }
+
+          var grid = document.createElement('div');
+          grid.className = 'field-grid';
+          fields(selected).forEach(function (pair) {
+            var row = document.createElement('div');
+            row.className = 'field';
+            var key = document.createElement('b');
+            key.textContent = pair[0];
+            var value = document.createElement('span');
+            value.textContent = pair[1];
+            row.appendChild(key);
+            row.appendChild(value);
+            grid.appendChild(row);
+          });
+          box.appendChild(grid);
+        }
+
+        function addLog(message) {
+          var item = document.createElement('li');
+          item.textContent = message;
+          document.getElementById('log').appendChild(item);
+        }
+
+        function renderAll() {
+          renderTree('currentTree', currentRoot);
+          renderTree('wipTree', wipRoot);
+          renderInspector();
+
+          var badge = document.getElementById('phaseBadge');
+          badge.textContent = phaseText[step];
+          badge.className = 'phase-badge' + (step === 4 ? ' done' : (step >= 1 ? ' wip' : ''));
+          document.getElementById('nextBtn').textContent = buttonText[step];
+        }
+
+        function next() {
+          if (step === 4) {
+            reset();
+            return;
+          }
+          step += 1;
+
+          if (step === 1) {
+            wipRoot = cloneWip(currentRoot, null);
+            wipRoot.child = null;
+            wipRoot.sibling = null;
+            selected = wipRoot;
+            addLog('createWorkInProgress(root)：新建 WIP 根，alternate 互指，stateNode 沿用同一个 FiberRoot，child 被清空。');
+          } else if (step === 2) {
+            var oldDiv = currentRoot.child;
+            var newDiv = cloneWip(oldDiv, wipRoot);
+            newDiv.effectTag = 'UPDATE';
+            wipRoot.child = newDiv;
+
+            var oldH1 = oldDiv.child;
+            var oldP = oldH1.sibling;
+            var newH1 = cloneWip(oldH1, newDiv);
+            var newP = cloneWip(oldP, newDiv);
+            newH1.effectTag = 'UPDATE';
+            newP.effectTag = 'UPDATE';
+            newH1.sibling = newP;
+            newDiv.child = newH1;
+
+            var newTitle = cloneWip(oldH1.child, newH1);
+            var newDesc = cloneWip(oldP.child, newP);
+            newTitle.effectTag = 'UPDATE';
+            newDesc.effectTag = 'UPDATE';
+            newH1.child = newTitle;
+            newP.child = newDesc;
+            selected = newDesc;
+            addLog('reconcileChildren：type/key 相同，逐个复用子节点并设置 return/child/sibling，全部标记 UPDATE。');
+          } else if (step === 3) {
+            var desc = wipRoot.child.child.sibling.child;
+            desc.pendingProps.content = 'Fiber 更新完成';
+            selected = desc;
+            addLog('渲染新 props：文本 Fiber 的 pendingProps.content 变为「Fiber 更新完成」，stateNode 仍指向原来的文本节点，等待 commit 更新。');
+          } else if (step === 4) {
+            var committedDesc = wipRoot.child.child.sibling.child;
+            committedDesc.stateNode = 'Text "Fiber 更新完成"';
+            currentRoot = wipRoot;
+            wipRoot = null;
+            selected = committedDesc;
+            addLog('commitRoot：先处理 deletions，再执行 UPDATE；最后 root.current = finishedWork，两棵树角色互换。');
+          }
+
+          renderAll();
+        }
+
+        function reset() {
+          currentRoot = buildInitialCurrent();
+          wipRoot = null;
+          step = 0;
+          selected = null;
+          document.getElementById('log').textContent = '';
+          renderAll();
+        }
+
+        document.getElementById('nextBtn').addEventListener('click', next);
+        document.getElementById('resetBtn').addEventListener('click', reset);
+        renderAll();
+      })();
+    </script>
+  </body>
+</html>

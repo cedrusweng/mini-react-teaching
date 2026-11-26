@@ -1,0 +1,14 @@
+{
+  "name": "mini-react-teaching",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "极简 React 教学版：演示 react / react-dom / reconciler / scheduler / shared 的调用关系",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "dev": "node scripts/serve.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

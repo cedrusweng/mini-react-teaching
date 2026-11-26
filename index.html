@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini React 教学版</title>
+    <link rel="stylesheet" href="/src/demo/styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <h1>Mini React 教学版</h1>
+      <p>用最少的代码复刻 React 核心包之间的调用关系。点击按钮可观察一次完整更新链路。</p>
+      <div class="header-links">
+        <a class="animation-link" href="/协调器设计.html">查看协调器设计文档 →</a>
+        <a class="animation-link" href="/reconciler-animation.html">查看协调器工作原理动画 →</a>
+        <a class="animation-link" href="/Fiber结构说明.html">查看 Fiber 结构与原理说明 →</a>
+      </div>
+    </header>
+
+    <main class="page-layout">
+      <section id="root" class="demo-panel" aria-label="演示区域"></section>
+
+      <aside class="relation-panel">
+        <h2>核心调用链</h2>
+        <ol>
+          <li><code>createElement / jsx</code> → <code>ReactElement</code></li>
+          <li><code>createRoot</code> → <code>createContainer</code> → <code>createFiberRoot</code></li>
+          <li><code>useState</code> → <code>dispatcher</code> → <code>renderWithHooks</code></li>
+          <li><code>setState</code> → <code>scheduleUpdateOnFiber</code> → <code>Scheduler</code></li>
+          <li><code>workLoop</code> → <code>beginWork / completeWork</code></li>
+          <li><code>commitRoot</code> → <code>commitWork</code> → <code>HostConfig</code> → DOM</li>
+        </ol>
+        <p class="hint">事件系统从 DOM 节点找到 Fiber，再调用组件里的 <code>onClick</code>，最终汇入同一条更新链。</p>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/demo/main.js"></script>
+  </body>
+</html>

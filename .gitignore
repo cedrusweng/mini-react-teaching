@@ -1,0 +1,28 @@
+HELP.md
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### 其他
+.mvn
+mvnw
+mvnw.cmd
+.DS_Store
+**/.DS_Store
+.DS_Store?
+.qoder
+.claude
+.comate
+.codebuddy
